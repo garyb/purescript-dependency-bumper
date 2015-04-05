@@ -1,0 +1,8 @@
+.*
+!/.gitignore
+!/.jshintrc
+/node_modules
+/bower_components
+/batch
+/cache
+/api_key.txt
