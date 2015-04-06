@@ -1,6 +1,7 @@
 .*
 !/.gitignore
 !/.jshintrc
+/*.sublime-*
 /node_modules
 /bower_components
 /batch

@@ -11,6 +11,8 @@ var _ = require("lodash");
 var bower = require("./lib/bower");
 var git = require("./lib/git");
 
+var input = "purescript-arrays";
+
 var orgs = [
   "purescript",
   "purescript-contrib"
@@ -21,7 +23,14 @@ var excludes = [
   "purescript-contrib/purescript-trampoline",
   "purescript-contrib/purescript-streams",
   "purescript-contrib/purescript-task",
-  "purescript-contrib/purescript-yoneda"
+  "purescript-contrib/purescript-yoneda",
+
+  "purescript-contrib/purescript-machines",
+  "purescript-contrib/purescript-argonaut",
+  "purescript-contrib/purescript-strongcheck",
+  "purescript-contrib/purescript-base",
+  "purescript-contrib/purescript-angular",
+  "purescript-contrib/purescript-channels"
 ];
 
 var fetchBowerFile = function (name) {
@@ -59,6 +68,7 @@ tryMkdir("cache")
     }));
   })
   .then(function () { return rimraf("batch"); })
+  .then(function () { return rimraf("bower_components"); })
   .delay(500)
   .then(function () { return tryMkdir("batch"); })
   .then(function () {
@@ -72,7 +82,6 @@ tryMkdir("cache")
       excludes.indexOf(repoName) === -1;
   })
   .then(function (repoNames) {
-    console.log(repoNames.join("\n"));
     return Bluebird.all(repoNames.map(fetchBowerFile));
   })
   .filter(function (bowerEntry) {
@@ -84,19 +93,37 @@ tryMkdir("cache")
     }
   })
   .then(function (bowerEntries) {
-    var dependants = findDependants(bowerEntries, "purescript-arrows");
-    process.chdir("batch");
-    return Bluebird.all(dependants.map(checkout))
-      .return([dependants, bowerEntries]);
-  })
-  .spread(function (dependants, bowerEntries) {
+    var dependants = findDependants(bowerEntries, input);
+    if (dependants.length === 0) {
+      throw new Error("Library has no dependants, aborting");
+    }
+    console.log("Dependants of " + input + ":");
+    console.log("  " + dependants.join("\n  "));
     var bowerDependencies = _.chain(dependants)
       .map(_.partial(getDependencies, bowerEntries))
       .flatten().unique().value();
-    return bower.install(bowerDependencies);
+    console.log("Bower dependencies for dependants:");
+    console.log("  " + bowerDependencies.join("\n  "));
+    return bower.install(bowerDependencies)
+        .return([dependants, bowerEntries]);
+  })
+  .spread(function (dependants, bowerEntries) {
+    process.chdir("batch");
+    return Bluebird.all(dependants.map(checkout));
     /*Bluebird.map(bowerDependencies, function (dep) {
       console.log("Installing " + dep + " with Bower...");
       return bower.install([dep]);
     }, { concurrency: 1 });*/
+  })
+  .catch(function (err) {
+    if (err.code === "ECONFLICT") {
+      err.picks.forEach(function (pick) {
+        console.log("!!", pick.endpoint.name + pick.endpoint.target);
+        pick.dependants.forEach(function (pick) {
+            console.log("  << ", pick.endpoint.name + pick.endpoint.target);
+        });
+      });
+    }
+    return Bluebird.reject(err);
   });
 
